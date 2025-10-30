@@ -105,37 +105,26 @@ export async function sauvegarderEcole(ecoleData: EcoleData): Promise<{ success:
 
 export async function obtenirEcole(id?: number): Promise<EcoleData | null> {
   try {
-    console.log('🔍 Début récupération école, ID:', id)
+    console.log('🔍 Appel API /api/ecole...')
     
-    const supabaseClient = await createAuthenticatedClient()
-    console.log('✅ Client Supabase créé')
-    
-    let query = supabaseClient.from('ecoles').select('*')
-    
-    if (id) {
-      query = query.eq('id', id)
-      console.log('🔍 Recherche école avec ID:', id)
-    } else {
-      query = query.limit(1) // Prendre la première école si pas d'ID
-      console.log('🔍 Recherche première école disponible')
+    const response = await fetch('/api/ecole', {
+      method: 'GET',
+      credentials: 'include' // Important pour envoyer les cookies
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      console.error('❌ Erreur API ecole:', error)
+      return null
     }
 
-    const { data, error } = await query.single()
-    console.log('📊 Résultat requête école:', { data, error })
+    const data = await response.json()
+    console.log('✅ École récupérée via API:', data.ecole?.nom)
+    
+    return data.ecole
 
-    if (error) {
-      if (error.code === 'PGRST116') {
-        console.log('ℹ️ Aucune école trouvée (normal si pas encore créée)')
-        return null
-      }
-      console.error('❌ Erreur Supabase:', error)
-      throw error
-    }
-
-    console.log('✅ École récupérée avec succès:', data)
-    return data
   } catch (error) {
-    console.error('❌ Erreur récupération école:', error)
+    console.error('❌ Erreur obtenirEcole:', error)
     return null
   }
 }
@@ -493,7 +482,7 @@ export async function obtenirEleveComplet(eleveId: number) {
     // Récupérer l'élève avec son parent
     const { data: eleve, error: eleveError } = await client
       .from('eleves')
-      .select('*, parents(*)')
+      .select('*, parents_tuteurs(*)')
       .eq('id', eleveId)
       .single()
 
@@ -763,7 +752,7 @@ export interface FactureData {
   numero_facture: string
   date_emission: string
   montant_total: number
-  statut: 'brouillon' | 'envoyee' | 'payee'
+  statut: 'non_payee' | 'payee' | 'annulee'
   date_echeance?: string
   notes?: string
 }
@@ -796,7 +785,7 @@ export async function creerFacture(factureData: {
   ecole_id: number
   eleve_id: number
   montant_total: number
-  statut: 'brouillon' | 'envoyee' | 'payee'
+  statut: 'non_payee' | 'payee' | 'annulee'
   date_echeance?: string
   notes?: string
   frais: Array<{type_frais_id: number, montant: number, quantite: number}>
@@ -1619,7 +1608,7 @@ export async function supprimerFacture(id: number): Promise<{ success: boolean; 
   }
 }
 
-export async function modifierStatutFacture(id: number, statut: 'brouillon' | 'envoyee' | 'payee'): Promise<{ success: boolean; error?: string }> {
+export async function modifierStatutFacture(id: number, statut: 'non_payee' | 'payee' | 'annulee'): Promise<{ success: boolean; error?: string }> {
   try {
     const { error } = await supabase
       .from('factures')
@@ -2848,7 +2837,7 @@ export async function creerFactureAvecElements(factureData: any, elements: any[]
         montant_total: elements.reduce((sum, el) => sum + (el.montant * el.quantite), 0),
         montant_paye: 0,
         montant_restant: elements.reduce((sum, el) => sum + (el.montant * el.quantite), 0),
-        statut: 'brouillon',
+        statut: 'non_payee',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }])
@@ -2944,7 +2933,6 @@ export async function sauvegarderBrouillonTemplate(data: any): Promise<{ success
     // Créer ou mettre à jour le brouillon
     const brouillonData = {
       ...data,
-      statut: 'brouillon',
       updated_at: new Date().toISOString()
     }
     

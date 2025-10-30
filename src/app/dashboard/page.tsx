@@ -246,6 +246,52 @@ export default function DashboardPage() {
     )
   }
 
+  // Vérifier si l'école est vide (pas de données)
+  const estEcoleVide = stats.nombreEleves === 0 && stats.nombreClasses === 0
+
+  if (estEcoleVide) {
+    return (
+      <div className="max-w-4xl mx-auto text-center py-12">
+        <div className="bg-white rounded-2xl shadow-lg p-12">
+          <div className="text-6xl mb-6">🎓</div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-4">
+            Bienvenue sur Sama École !
+          </h1>
+          <p className="text-gray-600 mb-8">
+            Votre école <strong>{ecoleNom}</strong> est prête à démarrer.
+            <br />
+            Commencez par créer vos premières classes et ajouter vos élèves.
+          </p>
+          
+          <div className="grid md:grid-cols-2 gap-6 mt-8">
+            <a 
+              href="/dashboard/classes" 
+              className="bg-blue-600 text-white px-6 py-4 rounded-lg hover:bg-blue-700 transition font-medium"
+            >
+              🏫 Créer une classe
+            </a>
+            <a 
+              href="/dashboard/eleves" 
+              className="bg-green-600 text-white px-6 py-4 rounded-lg hover:bg-green-700 transition font-medium"
+            >
+              👨‍🎓 Ajouter un élève
+            </a>
+          </div>
+          
+          <div className="mt-12 bg-blue-50 rounded-lg p-6">
+            <h3 className="font-semibold text-blue-900 mb-3">🚀 Premiers pas :</h3>
+            <ol className="text-left text-sm text-blue-800 space-y-2">
+              <li>1. Créez vos classes (exemple : CE1, CE2, CM1...)</li>
+              <li>2. Ajoutez vos élèves à chaque classe</li>
+              <li>3. Générez vos premières factures</li>
+              <li>4. Suivez vos paiements en temps réel</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       {/* Welcome Section */}

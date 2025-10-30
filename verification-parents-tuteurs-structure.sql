@@ -39,3 +39,4 @@ DELETE FROM parents_tuteurs WHERE nom = 'Test' AND prenom = 'Insertion';
 -- 5. Voir les données existantes
 SELECT * FROM parents_tuteurs LIMIT 3;
 
+

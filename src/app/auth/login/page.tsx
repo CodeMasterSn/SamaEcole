@@ -147,9 +147,11 @@ export default function LoginPage() {
             <CardContent className="space-y-6">
               {/* Messages */}
               {error && (
-                <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-800">
-                  <AlertTriangle className="w-4 h-4" />
-                  <span className="text-sm">{error}</span>
+                <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+                    <div className="text-sm text-red-800 whitespace-pre-line">{error}</div>
+                  </div>
                 </div>
               )}
 

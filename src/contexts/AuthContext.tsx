@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState } from 'react'
 import { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
+import { checkEcoleStatus } from '@/lib/check-ecole-status'
 
 interface AuthContextType {
   user: User | null
@@ -47,7 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(session.user)
           
           const { data: profile } = await supabase
-            .from('users')
+            .from('utilisateurs')
             .select('*')
             .eq('id', session.user.id)
             .single()
@@ -107,10 +108,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       
       if (data?.user) {
+        // Vérifier le statut de l'école AVANT de permettre la connexion
+        const statusCheck = await checkEcoleStatus(data.user.id)
+        
+        if (!statusCheck.allowed) {
+          // Déconnecter immédiatement l'utilisateur
+          await supabase.auth.signOut()
+          
+          // Retourner l'erreur avec le message de blocage
+          return { 
+            error: new Error(statusCheck.message || 'Accès refusé') 
+          }
+        }
+        
+        // Si l'école est autorisée, continuer normalement
         setUser(data.user)
         
         const { data: profile } = await supabase
-          .from('users')
+          .from('utilisateurs')
           .select('role')
           .eq('id', data.user.id)
           .single()

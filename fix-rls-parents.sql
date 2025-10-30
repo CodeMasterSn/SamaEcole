@@ -20,3 +20,4 @@ DELETE FROM parents WHERE nom = 'Test RLS';
 -- 5. Réactiver RLS après test (si nécessaire)
 -- ALTER TABLE parents ENABLE ROW LEVEL SECURITY;
 
+

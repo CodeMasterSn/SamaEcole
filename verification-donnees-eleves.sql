@@ -56,3 +56,4 @@ LEFT JOIN eleves e ON p.id = e.parent_id
 GROUP BY p.id, p.nom, p.prenom, p.telephone, p.relation
 ORDER BY p.nom;
 
+

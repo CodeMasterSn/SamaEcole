@@ -1,14 +1,14 @@
-import { createClient } from '@/lib/supabase-client'
+import { supabase } from '@/lib/supabase'
 
 /**
  * Crée un client Supabase avec le contexte école défini
  * Toutes les requêtes filtreront automatiquement par ecole_id
  */
 export const createEcoleClient = async (ecoleId: number) => {
-  const supabase = createClient()
+  const client = supabase
   
   // Définir le contexte école pour cette session
-  const { error } = await supabase.rpc('set_ecole_context', {
+  const { error } = await client.rpc('set_ecole_context', {
     ecole_id_param: ecoleId
   })
   
@@ -16,7 +16,7 @@ export const createEcoleClient = async (ecoleId: number) => {
     console.error('Erreur définition contexte école:', error)
   }
   
-  return supabase
+  return client
 }
 
 /**

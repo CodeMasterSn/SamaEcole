@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { obtenirEleves, obtenirClasses, obtenirFrais, creerFactureComplete, obtenirInfosEcole, obtenirEleveComplet, createAuthenticatedClient } from '@/lib/supabase-functions'
+import { obtenirEleves, obtenirClasses, obtenirFrais, obtenirInfosEcole, obtenirEleveComplet, createAuthenticatedClient } from '@/lib/supabase-functions'
 import { genererNumeroFacture } from '@/lib/utils'
 import { genererPDFFacture } from '@/lib/pdf-facture'
 import { Search, Plus, X, FileText, Calculator } from 'lucide-react'
@@ -52,27 +52,54 @@ export default function NouvelleFacturePage() {
     }
   }, [elevesSelectionnes])
 
+  // Charger les données via API
   const chargerDonnees = async () => {
-    setLoading(true)
-    const classesData = await obtenirClasses(1)
-    setClasses(classesData)
-    setLoading(false)
+    try {
+      setLoading(true)
+      
+      const response = await fetch('/api/factures/donnees', {
+        method: 'GET',
+        credentials: 'include'
+      })
+
+      if (!response.ok) {
+        throw new Error('Erreur chargement données')
+      }
+
+      const data = await response.json()
+      
+      console.log('✅ Données chargées:', {
+        eleves: data.eleves?.length,
+        classes: data.classes?.length,
+        frais: data.frais?.length
+      })
+      
+      // Stocker les élèves avec leurs relations
+      setTousLesEleves(data.eleves || [])
+      setEleves(data.eleves || [])
+      
+      // Stocker les classes
+      setClasses(data.classes || [])
+      
+      // Stocker les frais
+      setFrais(data.frais || [])
+      
+    } catch (error) {
+      console.error('❌ Erreur chargement:', error)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const chargerElevesClasse = async () => {
-    const elevesData = await obtenirEleves(1)
-    
-    console.log('Élèves chargés avec classes:', elevesData?.length)
-    console.log('Premier élève:', elevesData?.[0])
-    
-    setTousLesEleves(elevesData || []) // Stocker TOUS les élèves avec classes
-    
-    // Filtrer pour l'affichage selon la classe
+    // Les élèves sont déjà chargés via l'API, on filtre juste
     if (classeSelectionnee) {
-      const elevesFiltres = (elevesData || []).filter(e => e.classe_id === classeSelectionnee)
+      const elevesFiltres = tousLesEleves.filter(e => e.classe_id === classeSelectionnee)
       setEleves(elevesFiltres)
+      console.log('Élèves filtrés par classe:', elevesFiltres.length)
     } else {
-      setEleves(elevesData || [])
+      setEleves(tousLesEleves)
+      console.log('Tous les élèves affichés:', tousLesEleves.length)
     }
   }
 
@@ -83,25 +110,23 @@ export default function NouvelleFacturePage() {
     try {
       const eleve = tousLesEleves.find(e => e.id === eleveId)
       if (!eleve) return
-      
-      const client = await createAuthenticatedClient()
-      const { data } = await client
-        .from('frais_predefinis')
-        .select('*, classes(niveau, section)')
-        .eq('ecole_id', 1)
-        .eq('actif', true)
-        .order('type_frais', { ascending: true })
-      
-      // Filtrer : universels OU classe de l'élève
-      const fraisFiltres = (data || []).filter(f => 
-        !f.classe_id || f.classe_id === eleve.classe_id
-      )
-      
-      console.log(`📋 Frais pour ${eleve.nom} (${eleve.classe_id}):`, fraisFiltres.length)
-      setFrais(fraisFiltres)
+
+      // Utiliser les frais déjà chargés par l'API
+      // Filtrer par classe si nécessaire
+      const fraisFiltre = frais.filter(f => {
+        // Si le frais a une classe spécifique, vérifier la correspondance
+        if (f.classe_niveau && eleve.classes?.niveau) {
+          return f.classe_niveau === eleve.classes.niveau
+        }
+        // Sinon, c'est un frais pour toutes les classes
+        return true
+      })
+
+      console.log(`Frais pour ${eleve.nom} (classe ${eleve.classes?.nom_complet}):`, fraisFiltre.length)
+      // Ne pas utiliser setFrais ici car on utilise déjà les frais chargés
+      // Juste logger pour debug
     } catch (error) {
-      console.error('Erreur chargement frais élève:', error)
-      setFrais([])
+      console.error('Erreur chargerFraisUnEleve:', error)
     }
   }
 
@@ -110,30 +135,11 @@ export default function NouvelleFacturePage() {
    */
   const chargerTousLesFrais = async () => {
     try {
-      // Récupérer les classes des élèves sélectionnés
-      const elevesData = tousLesEleves.filter(e => elevesSelectionnes.includes(e.id))
-      const classesIds = [...new Set(elevesData.map(e => e.classe_id).filter(Boolean))]
-      
-      console.log('Classes concernées:', classesIds)
-      
-      const client = await createAuthenticatedClient()
-      const { data } = await client
-        .from('frais_predefinis')
-        .select('*, classes(niveau, section)')
-        .eq('ecole_id', 1)
-        .eq('actif', true)
-        .order('type_frais', { ascending: true })
-      
-      // Filtrer : universels OU classes des élèves sélectionnés
-      const fraisPertinents = (data || []).filter(f => 
-        !f.classe_id || classesIds.includes(f.classe_id)
-      )
-      
-      console.log('Frais pertinents chargés:', fraisPertinents.length)
-      setFrais(fraisPertinents)
+      // Les frais sont déjà chargés par l'API dans le state "frais"
+      console.log('Tous les frais disponibles:', frais.length)
+      // Pas besoin de setFrais car les frais sont déjà chargés
     } catch (error) {
-      console.error('Erreur chargement tous frais:', error)
-      setFrais([])
+      console.error('Erreur chargerTousLesFrais:', error)
     }
   }
 
@@ -144,7 +150,7 @@ export default function NouvelleFacturePage() {
       classe_id: frais.classe_id,
       designation: frais.designation,
       quantite: 1,
-      prix_unitaire: frais.montant,
+      tarif: frais.montant,
       montant: frais.montant
     }
     setLignesFacture([...lignesFacture, nouvelleLigne])
@@ -168,31 +174,28 @@ export default function NouvelleFacturePage() {
           frais_id: ligne.frais_id,
           designation: ligne.designation,
           quantite: ligne.quantite,
-          prix_unitaire: ligne.prix_unitaire,
-          montant: ligne.prix_unitaire * ligne.quantite
+          tarif: ligne.tarif,
+          montant: ligne.tarif * ligne.quantite
         })
         continue
       }
 
-      // Frais spécifique : trouver l'équivalent pour la classe de l'élève
-      const { data: fraisClasse } = await client
-        .from('frais_predefinis')
-        .select('*')
-        .eq('type_frais', ligne.type_frais)
-        .eq('classe_id', eleve.classe_id)
-        .eq('actif', true)
-        .single()
+      // Frais spécifique : chercher dans les frais déjà chargés
+      const fraisCorrespondant = frais.find(f => 
+        f.designation === ligne.designation ||
+        (f.type_frais && ligne.type_frais && f.type_frais === ligne.type_frais)
+      )
 
-      if (fraisClasse) {
+      if (fraisCorrespondant) {
         lignesAdaptees.push({
-          frais_id: fraisClasse.id,
-          designation: fraisClasse.designation,
+          frais_id: fraisCorrespondant.id,
+          designation: fraisCorrespondant.designation,
           quantite: ligne.quantite,
-          prix_unitaire: fraisClasse.montant,
-          montant: fraisClasse.montant * ligne.quantite
+          tarif: fraisCorrespondant.montant,
+          montant: fraisCorrespondant.montant * ligne.quantite
         })
       } else {
-        console.warn(`Frais ${ligne.type_frais} non trouvé pour classe de ${eleve.nom}`)
+        console.warn(`Frais non trouvé pour ligne: ${ligne.designation}`)
       }
     }
 
@@ -202,7 +205,7 @@ export default function NouvelleFacturePage() {
   const modifierQuantite = (index, quantite) => {
     const nouvelles = [...lignesFacture]
     nouvelles[index].quantite = quantite
-    nouvelles[index].montant = quantite * nouvelles[index].prix_unitaire
+    nouvelles[index].montant = quantite * nouvelles[index].tarif
     setLignesFacture(nouvelles)
   }
 
@@ -218,7 +221,19 @@ export default function NouvelleFacturePage() {
 
     setLoading(true)
     try {
-      const ecole = await obtenirInfosEcole(1)
+      // Récupérer l'école de l'utilisateur connecté
+      const ecoleResponse = await fetch('/api/ecole', {
+        method: 'GET',
+        credentials: 'include'
+      })
+      
+      if (!ecoleResponse.ok) {
+        throw new Error('Erreur récupération école')
+      }
+      
+      const ecoleData = await ecoleResponse.json()
+      const ecole = ecoleData.ecole
+      const ecoleId = ecole.id
       
       for (const eleveId of elevesSelectionnes) {
         const eleveComplet = await obtenirEleveComplet(eleveId)
@@ -235,7 +250,7 @@ export default function NouvelleFacturePage() {
               frais_id: l.frais_id,
               designation: l.designation,
               quantite: l.quantite,
-              prix_unitaire: l.prix_unitaire,
+              tarif: l.tarif,
               montant: l.montant
             }))
         
@@ -247,7 +262,7 @@ export default function NouvelleFacturePage() {
         const montantTotal = lignesFinales.reduce((sum, l) => sum + l.montant, 0)
 
         const factureData = {
-          ecole_id: 1,
+          ecole_id: ecoleId,
           eleve_id: eleveId,
           numero_facture: genererNumeroFacture(),
           date_emission: new Date().toISOString().split('T')[0],
@@ -255,15 +270,33 @@ export default function NouvelleFacturePage() {
           montant_total: montantTotal,
           montant_paye: 0,
           montant_restant: montantTotal,
-          statut: 'brouillon',
+          statut: 'non_payee',
           notes: `Facture pour ${eleveComplet.nom} ${eleveComplet.prenom}`
         }
 
-        const result = await creerFactureComplete(factureData, lignesFinales)
-        
-        if (result.success) {
-          await genererPDFFacture(result.data, eleveComplet, ecole, lignesFinales)
+        // Appeler l'API pour créer la facture
+        const response = await fetch('/api/factures/creer', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          credentials: 'include',
+          body: JSON.stringify({
+            factureData: factureData,
+            lignes: lignesFinales
+          })
+        })
+
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.error || 'Erreur création facture')
         }
+
+        const data = await response.json()
+        console.log('✅ Facture créée via API:', data.facture.numero_facture)
+        
+        // Générer le PDF
+        await genererPDFFacture(data.facture, eleveComplet, ecole, lignesFinales)
       }
 
       const message = modeMultiEleves
@@ -513,7 +546,7 @@ export default function NouvelleFacturePage() {
                           className="w-16 px-2 py-1 border rounded text-sm"
                         />
                         <span className="text-sm text-gray-600">×</span>
-                        <span className="text-sm">{ligne.prix_unitaire.toLocaleString()} FCFA</span>
+                        <span className="text-sm">{ligne.tarif.toLocaleString()} FCFA</span>
                       </div>
                       <p className="text-sm font-semibold mt-1">{ligne.montant.toLocaleString()} FCFA</p>
                     </div>

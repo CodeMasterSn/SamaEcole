@@ -61,3 +61,4 @@ FROM eleves e
 LEFT JOIN parents p ON e.parent_id = p.id
 LIMIT 5;
 
+

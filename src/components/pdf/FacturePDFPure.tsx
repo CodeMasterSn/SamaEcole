@@ -199,12 +199,12 @@ export default function FacturePDFPure({ facture, ecole }: FacturePDFPureProps) 
             </tr>
           </thead>
           <tbody>
-            {facture.details && facture.details.length > 0 ? (
-              facture.details.map((detail, index) => (
+            {facture.facture_lignes && facture.facture_lignes.length > 0 ? (
+              facture.facture_lignes.map((detail, index) => (
                 <tr key={index} style={{ backgroundColor: index % 2 === 0 ? '#ffffff' : '#f9fafb' }}>
                   <td style={styles.tableCell}>
                     <div style={{ fontWeight: '500', marginBottom: '2px' }}>
-                      {detail.type_frais?.nom || 'Frais non spécifié'}
+                      {detail.designation || 'Frais non spécifié'}
                     </div>
                     {detail.type_frais?.nom && (
                       <div style={{ fontSize: '12px', color: '#6b7280' }}>
@@ -216,10 +216,10 @@ export default function FacturePDFPure({ facture, ecole }: FacturePDFPureProps) 
                     {detail.quantite || 1}
                   </td>
                   <td style={{ ...styles.tableCell, textAlign: 'right' }}>
-                    {formatCurrency(detail.montant)}
+                    {formatCurrency(detail.tarif)}
                   </td>
                   <td style={{ ...styles.tableCell, textAlign: 'right', fontWeight: '500' }}>
-                    {formatCurrency(detail.montant * (detail.quantite || 1))}
+                    {formatCurrency(detail.montant)}
                   </td>
                 </tr>
               ))

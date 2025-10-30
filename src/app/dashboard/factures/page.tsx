@@ -35,7 +35,8 @@ import {
   MoreVertical,
   ChevronDown,
   X,
-  Receipt
+  Receipt,
+  XCircle
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { 
@@ -60,15 +61,16 @@ import FacturePDFModal from '@/components/pdf/FacturePDFModal'
 import { generateMultipleFacturesPDF } from '@/lib/pdf-utils'
 import { useAuth } from '@/contexts/AuthContext'
 import BoutonWhatsApp from '@/components/BoutonWhatsApp'
+import ModalEnregistrerPaiement from '@/components/ModalEnregistrerPaiement'
 
 type ViewMode = 'table' | 'cards' | 'stats'
 type PeriodFilter = 'all' | 'today' | 'week' | 'month' | 'custom'
 
 interface FactureStats {
   total: number
-  brouillon: number
-  envoyee: number
+  nonPayee: number
   payee: number
+  annulee: number
   totalMontant: number
   montantPaye: number
   montantEnAttente: number
@@ -95,6 +97,10 @@ export default function FacturesPage() {
   const [ecoleApercu, setEcoleApercu] = useState(null)
   const [lignesApercu, setLignesApercu] = useState([])
   const [showModal, setShowModal] = useState(false)
+  
+  // États pour modal de paiement
+  const [modalPaiementOpen, setModalPaiementOpen] = useState(false)
+  const [facturePourPaiement, setFacturePourPaiement] = useState<FactureComplet | null>(null)
   
   // Vue et filtres
   const [viewMode, setViewMode] = useState<ViewMode>('table')
@@ -124,17 +130,35 @@ export default function FacturesPage() {
     if (!wasRefreshing) setLoading(true)
     
     try {
-      const ecoleData = await obtenirEcole()
-      if (ecoleData?.id) {
-        const [facturesData, classesData] = await Promise.all([
-          obtenirFactures(ecoleData.id),
-          obtenirClassesAvecStats(ecoleData.id)
-        ])
-        
-        setFactures(facturesData)
-        setClasses(classesData)
-        setEcole(ecoleData)
+      console.log('🔍 Chargement factures via API...')
+      
+      const response = await fetch('/api/factures/liste', {
+        method: 'GET',
+        credentials: 'include'
+      })
+
+      if (!response.ok) {
+        throw new Error('Erreur chargement factures')
       }
+
+      const data = await response.json()
+      
+      setFactures(data.factures || [])
+      
+      console.log('✅ Factures chargées:', data.factures?.length)
+      
+      // Charger aussi l'école et les classes (utile pour les filtres)
+      try {
+        const ecoleData = await obtenirEcole()
+        if (ecoleData?.id) {
+          const classesData = await obtenirClassesAvecStats(ecoleData.id)
+          setClasses(classesData)
+          setEcole(ecoleData)
+        }
+      } catch (ecoleError) {
+        console.warn('⚠️ Erreur chargement école/classes:', ecoleError)
+      }
+      
     } catch (error) {
       console.error('❌ Erreur chargement factures:', error)
       afficherMessage('error', 'Erreur lors du chargement des factures')
@@ -221,12 +245,12 @@ export default function FacturesPage() {
     
     return {
       total: filtered.length,
-      brouillon: filtered.filter(f => f.statut === 'brouillon').length,
-      envoyee: filtered.filter(f => f.statut === 'envoyee').length,
+      nonPayee: filtered.filter(f => f.statut === 'non_payee').length,
       payee: filtered.filter(f => f.statut === 'payee').length,
+      annulee: filtered.filter(f => f.statut === 'annulee').length,
       totalMontant: filtered.reduce((sum, f) => sum + f.montant_total, 0),
       montantPaye: filtered.filter(f => f.statut === 'payee').reduce((sum, f) => sum + f.montant_total, 0),
-      montantEnAttente: filtered.filter(f => f.statut !== 'payee').reduce((sum, f) => sum + f.montant_total, 0)
+      montantEnAttente: filtered.filter(f => f.statut === 'non_payee').reduce((sum, f) => sum + f.montant_total, 0)
     }
   }
 
@@ -261,7 +285,7 @@ export default function FacturesPage() {
   }
 
   // Actions groupées
-  const bulkChangeStatus = async (newStatus: 'brouillon' | 'envoyee' | 'payee') => {
+  const bulkChangeStatus = async (newStatus: 'non_payee' | 'payee' | 'annulee') => {
     setSaving(true)
     try {
       let successCount = 0
@@ -359,27 +383,27 @@ export default function FacturesPage() {
 
   const getStatutColor = (statut: string) => {
     switch (statut) {
-      case 'brouillon': return 'bg-gray-100 text-gray-800 border-gray-200'
-      case 'envoyee': return 'bg-blue-100 text-blue-800 border-blue-200'
+      case 'non_payee': return 'bg-gray-100 text-gray-800 border-gray-200'
       case 'payee': return 'bg-green-100 text-green-800 border-green-200'
+      case 'annulee': return 'bg-red-100 text-red-800 border-red-200'
       default: return 'bg-gray-100 text-gray-800 border-gray-200'
     }
   }
 
   const getStatutLabel = (statut: string) => {
     switch (statut) {
-      case 'brouillon': return 'Brouillon'
-      case 'envoyee': return 'Envoyée'
+      case 'non_payee': return 'Non payée'
       case 'payee': return 'Payée'
+      case 'annulee': return 'Annulée'
       default: return statut
     }
   }
 
   const getStatutIcon = (statut: string) => {
     switch (statut) {
-      case 'brouillon': return <Edit className="w-3 h-3" />
-      case 'envoyee': return <Send className="w-3 h-3" />
+      case 'non_payee': return <Clock className="w-3 h-3" />
       case 'payee': return <CheckCircle className="w-3 h-3" />
+      case 'annulee': return <XCircle className="w-3 h-3" />
       default: return <Clock className="w-3 h-3" />
     }
   }
@@ -407,7 +431,7 @@ export default function FacturesPage() {
     }
   }
 
-  const changerStatutFacture = async (id: number, nouveauStatut: 'brouillon' | 'envoyee' | 'payee') => {
+  const changerStatutFacture = async (id: number, nouveauStatut: 'non_payee' | 'payee' | 'annulee') => {
     setSaving(true)
     try {
       const result = await modifierStatutFacture(id, nouveauStatut)
@@ -433,7 +457,7 @@ export default function FacturesPage() {
       // Charger données complètes
       const [eleve, ecole] = await Promise.all([
         obtenirEleveComplet(facture.eleve_id),
-        obtenirInfosEcole(1)
+        obtenirInfosEcole(facture.ecole_id)
       ])
       
       // Charger lignes de facture
@@ -500,7 +524,7 @@ export default function FacturesPage() {
       if (recuExistant) {
         // Si le reçu existe, générer directement le PDF
         const eleve = await obtenirEleveComplet(facture.eleve_id)
-        const ecole = await obtenirInfosEcole(1)
+        const ecole = await obtenirInfosEcole(facture.ecole_id)
         await genererPDFRecu(recuExistant, facture, eleve, ecole)
         return
       }
@@ -515,7 +539,7 @@ export default function FacturesPage() {
       if (result.success) {
         // Générer le PDF du reçu
         const eleve = await obtenirEleveComplet(facture.eleve_id)
-        const ecole = await obtenirInfosEcole(1)
+        const ecole = await obtenirInfosEcole(facture.ecole_id)
         await genererPDFRecu(result.data, facture, eleve, ecole)
         
         // Recharger les factures pour mettre à jour l'affichage
@@ -659,9 +683,9 @@ export default function FacturesPage() {
               className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="all">Tous les statuts</option>
-              <option value="brouillon">Brouillon</option>
-              <option value="envoyee">Envoyée</option>
+              <option value="non_payee">Non payée</option>
               <option value="payee">Payée</option>
+              <option value="annulee">Annulée</option>
             </select>
           </div>
         </div>
@@ -726,22 +750,12 @@ export default function FacturesPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => bulkChangeStatus('brouillon')}
+              onClick={() => bulkChangeStatus('non_payee')}
               disabled={saving}
               className="gap-1"
             >
               <Edit className="w-3 h-3" />
-              <span className="hidden sm:inline text-xs">Brouillon</span>
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => bulkChangeStatus('envoyee')}
-              disabled={saving}
-              className="gap-1"
-            >
-              <Send className="w-3 h-3" />
-              <span className="hidden sm:inline text-xs">Envoyée</span>
+              <span className="hidden sm:inline text-xs">Non payée</span>
             </Button>
             <Button
               variant="outline"
@@ -1030,15 +1044,15 @@ export default function FacturesPage() {
                               focus:outline-none focus:ring-2 focus:ring-offset-2
                               ${facture.statut === 'payee' 
                                 ? 'bg-green-50 text-green-700 border-green-200 focus:ring-green-500' 
-                                : facture.statut === 'envoyee'
-                                ? 'bg-blue-50 text-blue-700 border-blue-200 focus:ring-blue-500'
+                                : facture.statut === 'annulee'
+                                ? 'bg-red-50 text-red-700 border-red-200 focus:ring-red-500'
                                 : 'bg-gray-50 text-gray-700 border-gray-200 focus:ring-gray-500'
                               }
                             `}
-                          >
-                            <option value="brouillon">📝 Brouillon</option>
-                            <option value="envoyee">📤 Envoyée</option>
+                            >
+                            <option value="non_payee">📝 Non payée</option>
                             <option value="payee">✅ Payée</option>
+                            <option value="annulee">❌ Annulée</option>
                           </select>
                         </td>
                         <td className="p-2">
@@ -1050,7 +1064,7 @@ export default function FacturesPage() {
                               title="Télécharger PDF"
                               onClick={async () => {
                                 const eleve = await obtenirEleveComplet(facture.eleve_id)
-                                const ecole = await obtenirInfosEcole(1)
+                                const ecole = await obtenirInfosEcole(facture.ecole_id)
                                 const client = await createAuthenticatedClient()
                                 const { data: lignes } = await client
                                   .from('facture_lignes')
@@ -1062,6 +1076,21 @@ export default function FacturesPage() {
                             >
                               <Download className="w-3 h-3 text-purple-600" />
                             </Button>
+                            {/* Bouton Enregistrer paiement (si non payée) */}
+                            {facture.statut !== 'payee' && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 px-2 text-xs hover:bg-green-50"
+                                title="Enregistrer le paiement"
+                                onClick={() => {
+                                  setFacturePourPaiement(facture)
+                                  setModalPaiementOpen(true)
+                                }}
+                              >
+                                💰 Paiement
+                              </Button>
+                            )}
                             {/* Bouton WhatsApp - avec génération PDF */}
                             <BoutonWhatsApp
                               numeroDestinataire={facture.eleve?.parents?.telephone}
@@ -1265,16 +1294,9 @@ export default function FacturesPage() {
                     <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                       <div className="flex items-center gap-2">
                         <div className="w-3 h-3 bg-gray-400 rounded-full"></div>
-                        <span>Brouillons</span>
+                        <span>Non payées</span>
                       </div>
-                      <span className="font-medium">{stats.brouillon}</span>
-                    </div>
-                    <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                        <span>Envoyées</span>
-                      </div>
-                      <span className="font-medium">{stats.envoyee}</span>
+                      <span className="font-medium">{stats.nonPayee}</span>
                     </div>
                     <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
                       <div className="flex items-center gap-2">
@@ -1282,6 +1304,13 @@ export default function FacturesPage() {
                         <span>Payées</span>
                       </div>
                       <span className="font-medium">{stats.payee}</span>
+                    </div>
+                    <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                        <span>Annulées</span>
+                      </div>
+                      <span className="font-medium">{stats.annulee}</span>
                     </div>
                   </div>
                 </div>
@@ -1406,6 +1435,21 @@ export default function FacturesPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal Enregistrer Paiement */}
+      {facturePourPaiement && (
+        <ModalEnregistrerPaiement
+          isOpen={modalPaiementOpen}
+          onClose={() => {
+            setModalPaiementOpen(false)
+            setFacturePourPaiement(null)
+          }}
+          facture={facturePourPaiement}
+          onPaiementEnregistre={() => {
+            chargerFactures() // Recharger la liste
+          }}
+        />
       )}
     </div>
   )
